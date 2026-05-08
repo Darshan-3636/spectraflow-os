@@ -77,6 +77,7 @@ interface SimState {
   trajHead: { x: number; y: number; z: number };
   trajTarget: { x: number; y: number; z: number };
   trajPrevTarget: { x: number; y: number; z: number };
+  targetNodeId: number | null;
   executionSpeed: number; // units/sec
   decayRate: number; // 1/sec — higher = faster fade
   // actions
@@ -111,6 +112,8 @@ export interface TrajNode {
   life: number;
   hue: number;
   faultKind?: FaultKind;
+  pendingVisit?: boolean;
+  visits: number;
 }
 export interface TrajSegment {
   ax: number; ay: number; az: number;
@@ -237,6 +240,7 @@ const initial = (): Omit<SimState,
   trajHead: { x: 0, y: 0, z: 0 },
   trajTarget: randomTarget(),
   trajPrevTarget: { x: 0, y: 0, z: 0 },
+  targetNodeId: null,
   executionSpeed: 9,
   decayRate: 0.5,
 });
@@ -268,7 +272,7 @@ export const useSim = create<SimState>((set, get) => ({
       nodes.push({
         id: nextNodeId++,
         x: s.trajHead.x, y: s.trajHead.y, z: s.trajHead.z,
-        age: 0, life: 2.2, hue: 0, faultKind: kind,
+        age: 0, life: 2.2, hue: 0, faultKind: kind, visits: 0,
       });
     }
     const patch: Partial<SimState> = {
@@ -443,29 +447,54 @@ export const useSim = create<SimState>((set, get) => ({
     s.ramToCpuPulse = Math.max(0, s.ramToCpuPulse - dt * 1.6);
 
     // === TRAJECTORY LOOP ===
-    // Move execution head toward current target at executionSpeed.
+    // Pre-spawn target node, then move head toward it. Sometimes revisit existing nodes.
     {
+      // Ensure we have a target node queued
+      if (s.targetNodeId == null || !s.trajNodes.find((n) => n.id === s.targetNodeId)) {
+        const candidates = s.trajNodes.filter((n) => !n.faultKind && !n.pendingVisit);
+        if (candidates.length > 2 && Math.random() < 0.45) {
+          // Revisit an existing node
+          const n = candidates[Math.floor(Math.random() * candidates.length)];
+          s.trajTarget = { x: n.x, y: n.y, z: n.z };
+          s.targetNodeId = n.id;
+        } else {
+          // Pre-spawn a brand-new node well before the head reaches it
+          const t = randomTarget();
+          const baseLife = Math.max(0.3, 1 / Math.max(0.05, s.decayRate));
+          const id = nextNodeId++;
+          s.trajNodes.push({
+            id, x: t.x, y: t.y, z: t.z,
+            age: 0, life: baseLife + 12, hue: 170 + Math.random() * 90,
+            pendingVisit: true, visits: 0,
+          });
+          s.trajTarget = t;
+          s.targetNodeId = id;
+        }
+      }
       const head = s.trajHead;
       const tgt = s.trajTarget;
       const dx = tgt.x - head.x, dy = tgt.y - head.y, dz = tgt.z - head.z;
       const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
       const step = s.executionSpeed * dt;
       if (dist <= step + 0.01) {
-        // arrived — spawn node + segment, pick next target
+        // arrived — mark visit, spawn segment, queue next target
         head.x = tgt.x; head.y = tgt.y; head.z = tgt.z;
         const life = Math.max(0.3, 1 / Math.max(0.05, s.decayRate));
-        const hue = 170 + Math.random() * 90;
-        s.trajNodes.push({
-          id: nextNodeId++, x: tgt.x, y: tgt.y, z: tgt.z,
-          age: 0, life, hue,
-        });
+        const node = s.trajNodes.find((n) => n.id === s.targetNodeId);
+        const hue = node ? node.hue : 170 + Math.random() * 90;
+        if (node) {
+          node.pendingVisit = false;
+          node.visits += 1;
+          node.age = 0;
+          node.life = life + 1.5; // refresh life on each visit
+        }
         s.trajSegments.push({
           ax: s.trajPrevTarget.x, ay: s.trajPrevTarget.y, az: s.trajPrevTarget.z,
           bx: tgt.x, by: tgt.y, bz: tgt.z,
           age: 0, life, hue,
         });
         s.trajPrevTarget = { x: tgt.x, y: tgt.y, z: tgt.z };
-        s.trajTarget = randomTarget();
+        s.targetNodeId = null; // triggers next pick on the following tick
         // pulse cache + register on every spawn
         s.cachePulse = 1;
         s.registerFlash = { reg: Math.floor(Math.random() * 8), t: s.simTime };
@@ -478,7 +507,7 @@ export const useSim = create<SimState>((set, get) => ({
       // Age & cull
       for (const n of s.trajNodes) n.age += dt;
       for (const seg of s.trajSegments) seg.age += dt;
-      s.trajNodes = s.trajNodes.filter((n) => n.age < n.life);
+      s.trajNodes = s.trajNodes.filter((n) => n.pendingVisit || n.age < n.life);
       s.trajSegments = s.trajSegments.filter((sg) => sg.age < sg.life);
     }
 
@@ -532,6 +561,7 @@ export const useSim = create<SimState>((set, get) => ({
       trajHead: { ...s.trajHead },
       trajTarget: { ...s.trajTarget },
       trajPrevTarget: { ...s.trajPrevTarget },
+      targetNodeId: s.targetNodeId,
     });
   },
 }));

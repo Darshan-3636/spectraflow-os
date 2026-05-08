@@ -34,19 +34,34 @@ function TrajSegments() {
 
 function TrajNodes() {
   const nodes = useSim((s) => s.trajNodes);
+  const head = useSim((s) => s.trajHead);
+  const execSpeed = useSim((s) => s.executionSpeed);
   return (
     <>
       {nodes.map((n) => {
         const t = Math.min(1, n.age / n.life);
-        const op = 1 - t;
         const isFault = !!n.faultKind;
+        const isPending = !!n.pendingVisit;
+        // Pending nodes ramp opacity up as the head closes in.
+        let op: number;
+        if (isPending) {
+          const dx = n.x - head.x, dy = n.y - head.y, dz = n.z - head.z;
+          const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+          const tta = dist / Math.max(0.01, execSpeed); // seconds until arrival
+          // start faint very early, grow as it gets closer
+          op = Math.max(0.18, Math.min(0.9, 1 - tta / 6));
+        } else {
+          op = 1 - t;
+        }
         const color = isFault ? "#ff3355" : `hsl(${n.hue}, 95%, 70%)`;
-        const pulse = isFault ? 1 + Math.sin(n.age * 14) * 0.35 : 1;
+        const pulse = isFault ? 1 + Math.sin(n.age * 14) * 0.35
+          : isPending ? 0.7 + Math.sin(n.age * 6) * 0.1
+          : 1 + Math.min(0.4, n.visits * 0.15);
         return (
           <group key={n.id} position={[n.x, n.y, n.z]}>
             <mesh>
               <sphereGeometry args={[0.12 * pulse, 18, 18]} />
-              <meshBasicMaterial color={color} transparent opacity={op} />
+              <meshBasicMaterial color={color} transparent opacity={op} wireframe={isPending} />
             </mesh>
             <mesh>
               <sphereGeometry args={[(isFault ? 0.7 : 0.32) * pulse, 22, 22]} />
@@ -58,6 +73,12 @@ function TrajNodes() {
                 depthWrite={false}
               />
             </mesh>
+            {n.visits > 1 && !isFault && (
+              <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <ringGeometry args={[0.22, 0.26, 32]} />
+                <meshBasicMaterial color={color} transparent opacity={op * 0.6} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} depthWrite={false} />
+              </mesh>
+            )}
             {isFault && (
               <>
                 <mesh rotation={[Math.PI / 2, 0, 0]}>
@@ -86,7 +107,11 @@ function TrajNodes() {
                 fontWeight: isFault ? 700 : 400,
               }}
             >
-              {isFault ? `⚠ ${n.faultKind?.toUpperCase()} · #${n.id}` : `ID: ${n.id}`}
+              {isFault
+                ? `⚠ ${n.faultKind?.toUpperCase()} · #${n.id}`
+                : isPending
+                  ? `⊙ QUEUED · #${n.id}`
+                  : `ID: ${n.id}${n.visits > 1 ? ` ×${n.visits}` : ""}`}
             </Html>
           </group>
         );
@@ -98,29 +123,12 @@ function TrajNodes() {
 function ExecutionLine() {
   const head = useSim((s) => s.trajHead);
   const prev = useSim((s) => s.trajPrevTarget);
-  const target = useSim((s) => s.trajTarget);
-  const execSpeed = useSim((s) => s.executionSpeed);
   const headRef = useRef<THREE.Mesh>(null);
   const haloRef = useRef<THREE.Mesh>(null);
-  const previewRef = useRef<THREE.Mesh>(null);
-  const previewHaloRef = useRef<THREE.Mesh>(null);
-  const previewMatRef = useRef<THREE.MeshBasicMaterial>(null);
-  const previewHaloMatRef = useRef<THREE.MeshBasicMaterial>(null);
 
   useFrame(() => {
     if (headRef.current) headRef.current.position.set(head.x, head.y, head.z);
     if (haloRef.current) haloRef.current.position.set(head.x, head.y, head.z);
-    if (previewRef.current) previewRef.current.position.set(target.x, target.y, target.z);
-    if (previewHaloRef.current) previewHaloRef.current.position.set(target.x, target.y, target.z);
-    // Preview opacity ramps up as the head approaches; lead time scales with execution speed
-    const dx = target.x - head.x, dy = target.y - head.y, dz = target.z - head.z;
-    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-    const timeToArrive = dist / Math.max(0.01, execSpeed);
-    // appear over the last ~0.6s of travel; auto-scales with execSpeed via timeToArrive
-    const lead = 0.6;
-    const op = Math.max(0, Math.min(0.75, 1 - timeToArrive / lead));
-    if (previewMatRef.current) previewMatRef.current.opacity = op;
-    if (previewHaloMatRef.current) previewHaloMatRef.current.opacity = op * 0.4;
   });
 
   const beam = useMemo(() => {
@@ -151,22 +159,6 @@ function ExecutionLine() {
           color="#9be8ff"
           transparent
           opacity={0.25}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-        />
-      </mesh>
-      {/* Pre-spawn preview at next target — fades in just before the line arrives */}
-      <mesh ref={previewRef}>
-        <sphereGeometry args={[0.11, 16, 16]} />
-        <meshBasicMaterial ref={previewMatRef} color="#9be8ff" transparent opacity={0} />
-      </mesh>
-      <mesh ref={previewHaloRef}>
-        <sphereGeometry args={[0.34, 20, 20]} />
-        <meshBasicMaterial
-          ref={previewHaloMatRef}
-          color="#9be8ff"
-          transparent
-          opacity={0}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
         />

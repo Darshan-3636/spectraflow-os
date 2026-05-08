@@ -63,48 +63,50 @@ export function ControlDeck() {
           <span>I/O <span className="hud-value" style={{color:"var(--spark-blue)"}}>{io}</span></span>
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-4 flex-1 min-h-0">
-        <div className="flex flex-col gap-2 overflow-y-auto pr-2 min-h-0">
-          <label className="hud-label">Clock Speed × {clock.toFixed(2)}</label>
-          <input className="ult" type="range" min={0.25} max={4} step={0.05} value={clock} onChange={(e) => setClock(parseFloat(e.target.value))} />
-          <label className="hud-label">Time Dilation × {dilation.toFixed(2)}</label>
-          <input className="ult" type="range" min={0.1} max={2} step={0.05} value={dilation} onChange={(e) => setDilation(parseFloat(e.target.value))} />
-          <label className="hud-label">Execution Speed · {execSpeed.toFixed(1)} u/s</label>
-          <input className="ult" type="range" min={1} max={30} step={0.5} value={execSpeed} onChange={(e) => setExecSpeed(parseFloat(e.target.value))} />
-          <label className="hud-label">Decay Rate · {decayRate.toFixed(2)} /s · life {(1/Math.max(0.05,decayRate)).toFixed(1)}s</label>
-          <input className="ult" type="range" min={0.1} max={3} step={0.05} value={decayRate} onChange={(e) => setDecayRate(parseFloat(e.target.value))} />
+      <div className="grid grid-cols-2 gap-3 flex-1 min-h-0">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 content-start">
+          <div className="flex flex-col">
+            <label className="hud-label truncate">Clock × {clock.toFixed(2)}</label>
+            <input className="ult" type="range" min={0.25} max={4} step={0.05} value={clock} onChange={(e) => setClock(parseFloat(e.target.value))} />
+          </div>
+          <div className="flex flex-col">
+            <label className="hud-label truncate">Dilation × {dilation.toFixed(2)}</label>
+            <input className="ult" type="range" min={0.1} max={2} step={0.05} value={dilation} onChange={(e) => setDilation(parseFloat(e.target.value))} />
+          </div>
+          <div className="flex flex-col">
+            <label className="hud-label truncate">Exec · {execSpeed.toFixed(1)} u/s</label>
+            <input className="ult" type="range" min={1} max={30} step={0.5} value={execSpeed} onChange={(e) => setExecSpeed(parseFloat(e.target.value))} />
+          </div>
+          <div className="flex flex-col">
+            <label className="hud-label truncate">Decay · {decayRate.toFixed(2)}/s</label>
+            <input className="ult" type="range" min={0.1} max={3} step={0.05} value={decayRate} onChange={(e) => setDecayRate(parseFloat(e.target.value))} />
+          </div>
         </div>
-        <div className="flex flex-col gap-2 justify-center">
+        <div className="flex flex-col gap-1.5 justify-center">
           <button onClick={() => setRunning(!running)} className="text-[11px] tracking-[0.2em] uppercase border border-[color:var(--grid-line)] py-2 hover:bg-[color:oklch(1_0_0/0.04)]" style={{ color: running ? "var(--spark-cyan)" : "var(--spark-amber)" }}>
             {running ? "■ pause" : "▶ resume"}
           </button>
-          <label className="hud-label">Fault Type</label>
-          <select
-            value={fault}
-            onChange={(e) => setFault(e.target.value as FaultKind)}
-            className="bg-transparent text-[11px] tracking-[0.15em] uppercase border border-[color:var(--grid-line)] py-2 px-2 text-[color:var(--hud-text)]"
-          >
-            {FAULTS.map((f) => (
-              <option key={f.v} value={f.v} style={{ background: "#0a0d14" }}>{f.label}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => simulateFault(fault)}
-            className="text-[11px] tracking-[0.2em] uppercase border border-[color:var(--grid-line)] py-2 hover:bg-[color:oklch(1_0_0/0.04)]"
-            style={{ color: "var(--spark-red)" }}
-          >
-            ⚠ simulate fault
-          </button>
-          <button onClick={reset} className="text-[11px] tracking-[0.2em] uppercase border border-[color:var(--grid-line)] py-2 hover:bg-[color:oklch(1_0_0/0.04)]" style={{ color: "var(--spark-red)" }}>
+          <div className="grid grid-cols-[1fr_auto] gap-1.5">
+            <select
+              value={fault}
+              onChange={(e) => setFault(e.target.value as FaultKind)}
+              className="bg-transparent text-[10px] tracking-[0.1em] uppercase border border-[color:var(--grid-line)] py-1.5 px-2 text-[color:var(--hud-text)] min-w-0"
+            >
+              {FAULTS.map((f) => (
+                <option key={f.v} value={f.v} style={{ background: "#0a0d14" }}>{f.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => simulateFault(fault)}
+              className="text-[10px] tracking-[0.15em] uppercase border border-[color:var(--grid-line)] py-1.5 px-2 hover:bg-[color:oklch(1_0_0/0.04)]"
+              style={{ color: "var(--spark-red)" }}
+            >
+              ⚠ inject
+            </button>
+          </div>
+          <button onClick={reset} className="text-[10px] tracking-[0.2em] uppercase border border-[color:var(--grid-line)] py-1.5 hover:bg-[color:oklch(1_0_0/0.04)]" style={{ color: "var(--spark-red)" }}>
             ⟲ reset kernel
           </button>
-        </div>
-        <div className="flex flex-col gap-1 text-[10px] text-[color:var(--hud-dim)] justify-center">
-          <div>TRAJECTORY LOOP</div>
-          <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full" style={{background:"var(--spark-cyan)"}}/> execution line · spawns nodes on impact</div>
-          <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full" style={{background:"var(--spark-magenta)"}}/> nodes fade by decay rate</div>
-          <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full" style={{background:"var(--spark-amber)"}}/> cache pulses every spawn</div>
-          <div className="mt-2 opacity-70">Scheduler: priority round-robin</div>
         </div>
       </div>
     </div>

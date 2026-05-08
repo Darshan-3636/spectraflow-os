@@ -56,11 +56,11 @@ function Index() {
         <section className="flex flex-col gap-3 min-h-0">
           <CPUSchematic />
           <GPUSchematic />
-          <div className="panel relative p-3 flex-1 min-h-[120px] flex flex-col">
+          <div className="panel relative p-2 flex-1 min-h-[80px] flex flex-col">
             <div className="hud-label mb-1">Tone Map · Page→Frame</div>
             <div className="flex-1 min-h-0"><ToneMap /></div>
           </div>
-          <div className="panel relative p-3 flex-1 min-h-[120px] flex flex-col">
+          <div className="panel relative p-2 flex-1 min-h-[80px] flex flex-col">
             <div className="hud-label mb-1">PCA Coordinates · CPU/Faults/IO</div>
             <div className="flex-1 min-h-0"><PCAWaveform /></div>
           </div>
@@ -68,7 +68,7 @@ function Index() {
       </main>
 
       {/* Bottom */}
-      <footer className="grid grid-cols-[1fr_420px] gap-3 p-3 pt-0 h-[210px]">
+      <footer className="grid grid-cols-[1fr_460px] gap-3 p-3 pt-0 shrink-0" style={{ height: 200 }}>
         <Terminal />
         <ControlDeck />
       </footer>
