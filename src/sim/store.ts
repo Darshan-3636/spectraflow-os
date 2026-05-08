@@ -429,6 +429,46 @@ export const useSim = create<SimState>((set, get) => ({
     s.cacheMiss = Math.max(0, s.cacheMiss - dt * 1.2);
     s.ramToCpuPulse = Math.max(0, s.ramToCpuPulse - dt * 1.6);
 
+    // === TRAJECTORY LOOP ===
+    // Move execution head toward current target at executionSpeed.
+    {
+      const head = s.trajHead;
+      const tgt = s.trajTarget;
+      const dx = tgt.x - head.x, dy = tgt.y - head.y, dz = tgt.z - head.z;
+      const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+      const step = s.executionSpeed * dt;
+      if (dist <= step + 0.01) {
+        // arrived — spawn node + segment, pick next target
+        head.x = tgt.x; head.y = tgt.y; head.z = tgt.z;
+        const life = Math.max(0.3, 1 / Math.max(0.05, s.decayRate));
+        const hue = 170 + Math.random() * 90;
+        s.trajNodes.push({
+          id: nextNodeId++, x: tgt.x, y: tgt.y, z: tgt.z,
+          age: 0, life, hue,
+        });
+        s.trajSegments.push({
+          ax: s.trajPrevTarget.x, ay: s.trajPrevTarget.y, az: s.trajPrevTarget.z,
+          bx: tgt.x, by: tgt.y, bz: tgt.z,
+          age: 0, life, hue,
+        });
+        s.trajPrevTarget = { x: tgt.x, y: tgt.y, z: tgt.z };
+        s.trajTarget = randomTarget();
+        // pulse cache + register on every spawn
+        s.cachePulse = 1;
+        s.registerFlash = { reg: Math.floor(Math.random() * 8), t: s.simTime };
+        if (Math.random() < 0.18) { s.cacheMiss = 1; s.ramToCpuPulse = 1; }
+      } else {
+        head.x += (dx / dist) * step;
+        head.y += (dy / dist) * step;
+        head.z += (dz / dist) * step;
+      }
+      // Age & cull
+      for (const n of s.trajNodes) n.age += dt;
+      for (const seg of s.trajSegments) seg.age += dt;
+      s.trajNodes = s.trajNodes.filter((n) => n.age < n.life);
+      s.trajSegments = s.trajSegments.filter((sg) => sg.age < sg.life);
+    }
+
     // spark animation toward target
     const sp = s.spark;
     sp.x += (sp.tx - sp.x) * Math.min(1, dt * 12);
