@@ -77,6 +77,7 @@ interface SimState {
   trajHead: { x: number; y: number; z: number };
   trajTarget: { x: number; y: number; z: number };
   trajPrevTarget: { x: number; y: number; z: number };
+  targetNodeId: number | null;
   executionSpeed: number; // units/sec
   decayRate: number; // 1/sec — higher = faster fade
   // actions
