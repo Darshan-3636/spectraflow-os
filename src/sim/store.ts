@@ -221,6 +221,13 @@ const initial = (): Omit<SimState, "setRunning" | "setClock" | "setDilation" | "
   ramToCpuPulse: 0,
   pageMigrations: [],
   pendingSwitch: null,
+  trajNodes: [],
+  trajSegments: [],
+  trajHead: { x: 0, y: 0, z: 0 },
+  trajTarget: randomTarget(),
+  trajPrevTarget: { x: 0, y: 0, z: 0 },
+  executionSpeed: 9,
+  decayRate: 0.5,
 });
 
 export const useSim = create<SimState>((set, get) => ({
