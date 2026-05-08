@@ -259,10 +259,23 @@ export const useSim = create<SimState>((set, get) => ({
       deadlock: "DEADLOCK DETECTED",
     };
     logPush(s as SimState, "err", `FAULT INJECTED · ${labels[kind]}`);
+    // Attach fault to most-recent node OR drop a new fault node at the execution head
+    const nodes = [...s.trajNodes];
+    if (nodes.length) {
+      const last = nodes[nodes.length - 1];
+      nodes[nodes.length - 1] = { ...last, faultKind: kind, age: 0, life: Math.max(last.life, 2.2) };
+    } else {
+      nodes.push({
+        id: nextNodeId++,
+        x: s.trajHead.x, y: s.trajHead.y, z: s.trajHead.z,
+        age: 0, life: 2.2, hue: 0, faultKind: kind,
+      });
+    }
     const patch: Partial<SimState> = {
       faultsTotal: s.faultsTotal + 1,
       cachePulse: 1,
       registerFlash: { reg: Math.floor(Math.random() * 8), t: s.simTime },
+      trajNodes: nodes,
     };
     if (kind === "cache_miss" || kind === "page") {
       patch.cacheMiss = 1;
