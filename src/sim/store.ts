@@ -20,6 +20,10 @@ export interface SimProcess {
   hue: number; // 0..360
   flare: number; // 0..1 transient
   cpuLoad: number; // 0..1
+  history: { x: number; y: number; z: number }[];
+  histAccum: number;
+  opacity: number; // 0..1, fades when dying
+  dying: boolean;
 }
 
 export interface LogEntry {
@@ -36,8 +40,13 @@ export interface MetricSample {
   scatter?: { virt: number; phys: number; intensity: number; hue: number };
 }
 
-const TOTAL_FRAMES = 64; // RAM frames
-const TOTAL_DISK_BLOCKS = 256;
+const TOTAL_FRAMES = 64; // RAM frames (visualizes 16 GB)
+const TOTAL_DISK_BLOCKS = 256; // disk blocks (visualizes 1 TB)
+const RAM_LABEL = "16 GB";
+const DISK_LABEL = "1 TB";
+const X_DRIFT = 0.55; // units/sec — time flows along -X
+const X_SPAWN = 9;
+const X_DEATH = -11;
 
 interface SimState {
   running: boolean;
@@ -57,6 +66,11 @@ interface SimState {
   faultsTotal: number;
   ioTotal: number;
   registerFlash: { reg: number; t: number } | null;
+  cachePulse: number; // 0..1 decays
+  cacheMiss: number; // 0..1 decays
+  ramToCpuPulse: number; // 0..1 decays — visible as RAM->CPU latency
+  pageMigrations: PageMigration[];
+  pendingSwitch: { pid: number; at: number } | null; // ctx switch queued after cache pulse
   // actions
   setRunning: (v: boolean) => void;
   setClock: (v: number) => void;
@@ -67,6 +81,17 @@ interface SimState {
   tick: (dtRealSec: number) => void;
   reset: () => void;
 }
+
+export interface PageMigration {
+  id: number;
+  pid: number;
+  hue: number;
+  page: number; // virtual page index
+  frame: number; // target frame
+  t: number; // 0..1 progress
+  duration: number; // sec
+}
+let nextMigId = 1;
 
 let nextPid = 100;
 const PROC_NAMES = ["kernel_task", "vmlinuz", "scheduler", "systemd", "neuralcore", "iohelper", "renderd", "audio_dsp", "netmgr", "ult_daemon", "shaderc", "pagefault_h", "blockio", "tty", "fsync", "mmu_pump"];
@@ -98,22 +123,37 @@ function makeProcess(state: SimState): SimProcess | null {
     faultProbability: rand(0.005, 0.05),
     state: "ready",
     threadCount: Math.floor(rand(1, 6)),
-    x: rand(-6, 6),
+    x: X_SPAWN + rand(-0.5, 0.5),
     y: (priority - 0.5) * 8,
-    z: rand(-6, 6),
+    z: rand(-4, 4),
     hue: rand(180, 260),
     flare: 0,
     cpuLoad: 0,
+    history: [],
+    histAccum: 0,
+    opacity: 0,
+    dying: false,
   };
 }
 
 function tryAllocate(state: SimState, p: SimProcess) {
-  // allocate any missing frames
+  // allocate any missing frames; emit a per-page migration animation
   const need = p.memoryPages - p.framesAllocated.length;
   if (need <= 0) return true;
   if (state.freeFrames.length < need) return false;
   const frames = pickFreeBlocks(state.freeFrames, need);
   p.framesAllocated.push(...frames);
+  for (let i = 0; i < frames.length; i++) {
+    state.pageMigrations.push({
+      id: nextMigId++,
+      pid: p.pid,
+      hue: p.hue,
+      page: i,
+      frame: frames[i],
+      t: -i * 0.08, // staggered start so the pages "shatter" outward
+      duration: 1.1 + Math.random() * 0.4,
+    });
+  }
   return true;
 }
 
@@ -147,6 +187,11 @@ const initial = (): Omit<SimState, "setRunning" | "setClock" | "setDilation" | "
   faultsTotal: 0,
   ioTotal: 0,
   registerFlash: null,
+  cachePulse: 0,
+  cacheMiss: 0,
+  ramToCpuPulse: 0,
+  pageMigrations: [],
+  pendingSwitch: null,
 });
 
 export const useSim = create<SimState>((set, get) => ({
@@ -202,27 +247,41 @@ export const useSim = create<SimState>((set, get) => ({
 
     // --- Scheduler: priority-based round robin ---
     if (s.currentPid === null || s.quantumRemaining <= 0 || !s.processes[s.currentPid]) {
-      // pick highest-priority ready/waiting that has frames
-      const candidates = Object.values(s.processes).filter((p) =>
-        p.state !== "terminated" && p.framesAllocated.length === p.memoryPages
-      );
-      if (candidates.length > 0) {
-        // weighted by priority + small random
-        candidates.sort((a, b) => (b.priority + Math.random() * 0.3) - (a.priority + Math.random() * 0.3));
-        const next = candidates[0];
-        const prev = s.currentPid;
-        s.currentPid = next.pid;
-        s.quantumRemaining = 0.4 / s.clockMultiplier; // seconds
-        next.state = "running";
-        next.flare = 1;
-        if (prev && s.processes[prev]) s.processes[prev].state = "ready";
-        // spark target
-        s.spark.tx = next.x;
-        s.spark.ty = next.y;
-        s.spark.tz = next.z;
-        // register flash
-        s.registerFlash = { reg: Math.floor(Math.random() * 8), t: s.simTime };
-        logPush(s, "info", `SCHEDULER: ctx switch → PID ${next.pid} q=${(s.quantumRemaining * 1000).toFixed(0)}ms`);
+      if (!s.pendingSwitch) {
+        const candidates = Object.values(s.processes).filter((p) =>
+          !p.dying && p.state !== "terminated" && p.framesAllocated.length === p.memoryPages
+        );
+        if (candidates.length > 0) {
+          candidates.sort((a, b) => (b.priority + Math.random() * 0.3) - (a.priority + Math.random() * 0.3));
+          const next = candidates[0];
+          // arm cache pulse before the spark jumps
+          s.cachePulse = 1;
+          const miss = Math.random() < 0.25;
+          if (miss) {
+            s.cacheMiss = 1;
+            s.ramToCpuPulse = 1;
+            logPush(s, "warn", `CACHE: L2 MISS — fetching from RAM (PID ${next.pid})`);
+          }
+          const delay = miss ? 0.45 : 0.18;
+          s.pendingSwitch = { pid: next.pid, at: s.simTime + delay };
+          s.registerFlash = { reg: Math.floor(Math.random() * 8), t: s.simTime };
+        }
+      } else if (s.simTime >= s.pendingSwitch.at) {
+        const nextPid = s.pendingSwitch.pid;
+        const next = s.processes[nextPid];
+        s.pendingSwitch = null;
+        if (next) {
+          const prev = s.currentPid;
+          s.currentPid = next.pid;
+          s.quantumRemaining = 0.4 / s.clockMultiplier;
+          next.state = "running";
+          next.flare = 1;
+          if (prev && s.processes[prev]) s.processes[prev].state = "ready";
+          s.spark.tx = next.x;
+          s.spark.ty = next.y;
+          s.spark.tz = next.z;
+          logPush(s, "info", `SCHEDULER: ctx switch → PID ${next.pid} q=${(s.quantumRemaining * 1000).toFixed(0)}ms`);
+        }
       }
     } else {
       s.quantumRemaining -= dt;
@@ -252,22 +311,53 @@ export const useSim = create<SimState>((set, get) => ({
         if (p.executionRemaining <= 0) {
           logPush(s, "info", `KERNEL: PID ${p.pid} exited cleanly`);
           freeProcessMemory(s, p);
-          delete s.processes[p.pid];
+          p.dying = true;
           s.currentPid = null;
           s.quantumRemaining = 0;
         }
       }
     }
 
-    // decay flares & cpuLoad on idle procs
+    // decay flares & cpuLoad on idle procs; drive X-axis time flow + history trails
+    const toDelete: number[] = [];
     for (const p of Object.values(s.processes)) {
       p.flare = Math.max(0, p.flare - dt * 1.5);
       if (p.pid !== s.currentPid) p.cpuLoad = Math.max(0, p.cpuLoad - dt * 2);
-      // gentle drift
-      p.x += Math.sin(s.simTime * 0.3 + p.pid) * dt * 0.05;
-      p.z += Math.cos(s.simTime * 0.27 + p.pid * 0.7) * dt * 0.05;
-      p.y += (((p.priority - 0.5) * 8) - p.y) * dt * 0.5;
+      // Time axis: cluster drifts toward -X. Spark/active procs drift slightly slower for readability.
+      const drift = X_DRIFT * (p.pid === s.currentPid ? 0.6 : 1);
+      p.x -= dt * drift;
+      // Z = CPU footprint (live), Y = priority band; both are organic
+      const targetZ = (p.cpuLoad - 0.5) * 6 + Math.sin(s.simTime * 0.4 + p.pid) * 0.4;
+      p.z += (targetZ - p.z) * Math.min(1, dt * 2);
+      p.y += (((p.priority - 0.5) * 8) - p.y) * Math.min(1, dt * 2);
+      // opacity: fade in on spawn, fade out on dying
+      if (p.dying) p.opacity = Math.max(0, p.opacity - dt * 1.4);
+      else p.opacity = Math.min(1, p.opacity + dt * 2.5);
+      // record history sample roughly every 0.07s
+      p.histAccum += dt;
+      if (p.histAccum > 0.07) {
+        p.histAccum = 0;
+        p.history.push({ x: p.x, y: p.y, z: p.z });
+        if (p.history.length > 50) p.history.shift();
+      }
+      if (p.x < X_DEATH || (p.dying && p.opacity <= 0.01)) {
+        if (!p.dying) freeProcessMemory(s, p);
+        toDelete.push(p.pid);
+      }
     }
+    for (const pid of toDelete) delete s.processes[pid];
+
+    // page migration progress
+    if (s.pageMigrations.length) {
+      s.pageMigrations = s.pageMigrations
+        .map((m) => ({ ...m, t: m.t + dt / m.duration }))
+        .filter((m) => m.t < 1.15);
+    }
+
+    // cache / ram pulses decay
+    s.cachePulse = Math.max(0, s.cachePulse - dt * 1.8);
+    s.cacheMiss = Math.max(0, s.cacheMiss - dt * 1.2);
+    s.ramToCpuPulse = Math.max(0, s.ramToCpuPulse - dt * 1.6);
 
     // spark animation toward target
     const sp = s.spark;
@@ -295,8 +385,27 @@ export const useSim = create<SimState>((set, get) => ({
     }
 
     // trigger re-render (mutate-then-set pattern)
-    set({ simTime: s.simTime, processes: { ...s.processes }, freeFrames: s.freeFrames, freeDiskBlocks: s.freeDiskBlocks, currentPid: s.currentPid, quantumRemaining: s.quantumRemaining, spark: { ...sp, trail: [...sp.trail] }, logs: [...s.logs], metrics: [...s.metrics], cpuLoadEMA: s.cpuLoadEMA, faultsTotal: s.faultsTotal, ioTotal: s.ioTotal, registerFlash: s.registerFlash });
+    set({
+      simTime: s.simTime,
+      processes: { ...s.processes },
+      freeFrames: s.freeFrames,
+      freeDiskBlocks: s.freeDiskBlocks,
+      currentPid: s.currentPid,
+      quantumRemaining: s.quantumRemaining,
+      spark: { ...sp, trail: [...sp.trail] },
+      logs: [...s.logs],
+      metrics: [...s.metrics],
+      cpuLoadEMA: s.cpuLoadEMA,
+      faultsTotal: s.faultsTotal,
+      ioTotal: s.ioTotal,
+      registerFlash: s.registerFlash,
+      cachePulse: s.cachePulse,
+      cacheMiss: s.cacheMiss,
+      ramToCpuPulse: s.ramToCpuPulse,
+      pageMigrations: [...s.pageMigrations],
+      pendingSwitch: s.pendingSwitch,
+    });
   },
 }));
 
-export const SIM_CONST = { TOTAL_FRAMES, TOTAL_DISK_BLOCKS };
+export const SIM_CONST = { TOTAL_FRAMES, TOTAL_DISK_BLOCKS, RAM_LABEL, DISK_LABEL };
