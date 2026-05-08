@@ -63,8 +63,8 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
+  --background: oklch(0.08 0.01 270);
+  --foreground: oklch(0.95 0.01 250);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.129 0.042 264.695);
   --popover: oklch(1 0 0);
@@ -95,6 +95,20 @@
   --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
   --sidebar-border: oklch(0.929 0.013 255.508);
   --sidebar-ring: oklch(0.704 0.04 256.788);
+
+  /* Ultron-OS spectral palette */
+  --void: oklch(0.06 0.01 270);
+  --void-2: oklch(0.10 0.015 270);
+  --grid-line: oklch(1 0 0 / 6%);
+  --hud-text: oklch(0.85 0.02 250);
+  --hud-dim: oklch(0.55 0.02 250);
+  --spark-cyan: oklch(0.85 0.18 200);
+  --spark-magenta: oklch(0.70 0.30 330);
+  --spark-amber: oklch(0.82 0.18 70);
+  --spark-red: oklch(0.65 0.27 25);
+  --spark-blue: oklch(0.65 0.22 250);
+  --spark-yellow: oklch(0.90 0.18 95);
+  --spark-white: oklch(0.98 0.02 250);
 }
 
 .dark {
