@@ -156,3 +156,24 @@
     color: var(--color-foreground);
   }
 }
+
+/* Ultron-OS theme overrides */
+html, body, #root { height: 100%; background: var(--void); color: var(--hud-text); }
+body { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: 0.02em; }
+.hud-label { font-size: 10px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--hud-dim); }
+.hud-value { font-size: 11px; color: var(--hud-text); }
+.panel { background: linear-gradient(180deg, oklch(0.08 0.01 270 / 0.6), oklch(0.05 0.01 270 / 0.6)); border: 1px solid var(--grid-line); backdrop-filter: blur(4px); }
+.scanline::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, oklch(1 0 0 / 0.02) 0px, oklch(1 0 0 / 0.02) 1px, transparent 1px, transparent 3px); }
+.glow-text { text-shadow: 0 0 8px currentColor; }
+.terminal-line { font-size: 11px; line-height: 1.45; color: var(--hud-text); opacity: 0.85; }
+.terminal-line .t { color: var(--spark-cyan); }
+.terminal-line .w { color: var(--spark-amber); }
+.terminal-line .e { color: var(--spark-red); }
+
+/* thin slider */
+input[type="range"].ult { -webkit-appearance: none; width: 100%; height: 2px; background: var(--grid-line); outline: none; }
+input[type="range"].ult::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 10px; border-radius: 50%; background: var(--spark-cyan); box-shadow: 0 0 12px var(--spark-cyan); cursor: pointer; }
+input[type="range"].ult::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: var(--spark-cyan); border: none; box-shadow: 0 0 12px var(--spark-cyan); cursor: pointer; }
+
+@keyframes ult-flicker { 0%,100% { opacity: 1; } 50% { opacity: 0.85; } }
+.flicker { animation: ult-flicker 4s ease-in-out infinite; }
