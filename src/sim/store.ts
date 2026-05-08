@@ -93,6 +93,24 @@ export interface PageMigration {
 }
 let nextMigId = 1;
 
+export interface TrajNode {
+  id: number;
+  x: number; y: number; z: number;
+  age: number;
+  life: number;
+  hue: number;
+  faultKind?: FaultKind;
+}
+export interface TrajSegment {
+  ax: number; ay: number; az: number;
+  bx: number; by: number; bz: number;
+  age: number;
+  life: number;
+  hue: number;
+}
+export type FaultKind = "page" | "cache_miss" | "segfault" | "stack_overflow" | "div_by_zero" | "deadlock";
+let nextNodeId = 100;
+
 let nextPid = 100;
 const PROC_NAMES = ["kernel_task", "vmlinuz", "scheduler", "systemd", "neuralcore", "iohelper", "renderd", "audio_dsp", "netmgr", "ult_daemon", "shaderc", "pagefault_h", "blockio", "tty", "fsync", "mmu_pump"];
 
