@@ -561,6 +561,7 @@ export const useSim = create<SimState>((set, get) => ({
       trajHead: { ...s.trajHead },
       trajTarget: { ...s.trajTarget },
       trajPrevTarget: { ...s.trajPrevTarget },
+      targetNodeId: s.targetNodeId,
     });
   },
 }));
