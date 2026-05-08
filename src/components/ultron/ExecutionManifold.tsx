@@ -108,10 +108,8 @@ function Spark() {
         <meshBasicMaterial color="#9be8ff" transparent opacity={0.18} />
       </mesh>
       {/* trail line */}
-      {/* @ts-expect-error r3f line */}
       <line ref={trailRef} geometry={trailGeom}>
         <lineBasicMaterial color="#9be8ff" transparent opacity={0.7} />
-      {/* @ts-expect-error r3f line */}
       </line>
     </group>
   );
@@ -136,10 +134,8 @@ function MigrationStreams() {
         }
         const g = new THREE.BufferGeometry().setFromPoints(points);
         return (
-          // @ts-expect-error r3f line
           <line key={p.pid} geometry={g}>
             <lineBasicMaterial color={`hsl(${p.hue}, 80%, 60%)`} transparent opacity={0.25} />
-          // @ts-expect-error r3f line
           </line>
         );
       })}
