@@ -68,7 +68,7 @@ function Index() {
       </main>
 
       {/* Bottom */}
-      <footer className="grid grid-cols-[1fr_420px] gap-3 p-3 pt-0 h-[210px]">
+      <footer className="grid grid-cols-[1fr_460px] gap-3 p-3 pt-0 shrink-0" style={{ height: 200 }}>
         <Terminal />
         <ControlDeck />
       </footer>
