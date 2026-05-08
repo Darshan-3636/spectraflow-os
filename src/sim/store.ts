@@ -71,11 +71,22 @@ interface SimState {
   ramToCpuPulse: number; // 0..1 decays — visible as RAM->CPU latency
   pageMigrations: PageMigration[];
   pendingSwitch: { pid: number; at: number } | null; // ctx switch queued after cache pulse
+  // Trajectory loop
+  trajNodes: TrajNode[];
+  trajSegments: TrajSegment[];
+  trajHead: { x: number; y: number; z: number };
+  trajTarget: { x: number; y: number; z: number };
+  trajPrevTarget: { x: number; y: number; z: number };
+  executionSpeed: number; // units/sec
+  decayRate: number; // 1/sec — higher = faster fade
   // actions
   setRunning: (v: boolean) => void;
   setClock: (v: number) => void;
   setDilation: (v: number) => void;
   setTarget: (v: number) => void;
+  setExecutionSpeed: (v: number) => void;
+  setDecayRate: (v: number) => void;
+  simulateFault: (kind: FaultKind) => void;
   spawnProcess: () => void;
   killProcess: (pid: number) => void;
   tick: (dtRealSec: number) => void;
