@@ -214,7 +214,7 @@ function randomTarget() {
 
 const initial = (): Omit<SimState,
   "setRunning" | "setClock" | "setDilation" | "setTarget" | "spawnProcess" | "killProcess" | "tick" | "reset"
-  | "setExecutionSpeed" | "setDecayRate" | "simulateFault"
+  | "setExecutionSpeed" | "setDecayRate" | "setNodeSpawnRate" | "simulateFault"
 > => ({
   running: true,
   simTime: 0,
