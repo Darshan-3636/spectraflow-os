@@ -77,13 +77,14 @@ function ProcessNode({ pid }: { pid: number }) {
 
 function Spark() {
   const spark = useSim((s) => s.spark);
-  const trailRef = useRef<THREE.Line>(null);
   const dotRef = useRef<THREE.Mesh>(null);
   const trailGeom = useMemo(() => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(60 * 3), 3));
     return g;
   }, []);
+  const trailMat = useMemo(() => new THREE.LineBasicMaterial({ color: "#9be8ff", transparent: true, opacity: 0.7 }), []);
+  const trailLine = useMemo(() => new THREE.Line(trailGeom, trailMat), [trailGeom, trailMat]);
 
   useFrame(() => {
     if (!dotRef.current) return;
@@ -107,10 +108,7 @@ function Spark() {
         <sphereGeometry args={[0.35, 16, 16]} />
         <meshBasicMaterial color="#9be8ff" transparent opacity={0.18} />
       </mesh>
-      {/* trail line */}
-      <line ref={trailRef} geometry={trailGeom}>
-        <lineBasicMaterial color="#9be8ff" transparent opacity={0.7} />
-      </line>
+      <primitive object={trailLine} />
     </group>
   );
 }
@@ -133,11 +131,9 @@ function MigrationStreams() {
           points.push(v);
         }
         const g = new THREE.BufferGeometry().setFromPoints(points);
-        return (
-          <line key={p.pid} geometry={g}>
-            <lineBasicMaterial color={`hsl(${p.hue}, 80%, 60%)`} transparent opacity={0.25} />
-          </line>
-        );
+        const mat = new THREE.LineBasicMaterial({ color: `hsl(${p.hue}, 80%, 60%)`, transparent: true, opacity: 0.25 });
+        const line = new THREE.Line(g, mat);
+        return <primitive key={p.pid} object={line} />;
       })}
     </>
   );
