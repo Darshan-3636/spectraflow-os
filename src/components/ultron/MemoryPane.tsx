@@ -37,11 +37,14 @@ export function MemoryPane() {
     <div className="flex flex-col gap-3 h-full">
       {/* RAM */}
       <div className="panel relative p-3 flex-1 min-h-0 flex flex-col">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-1">
           <span className="hud-label">Main Memory · RAM</span>
-          <span className="hud-value" style={{ color: "var(--spark-cyan)" }}>{usedFrames}/{SIM_CONST.TOTAL_FRAMES}</span>
+          <span className="hud-value" style={{ color: "var(--spark-cyan)" }}>{SIM_CONST.RAM_LABEL}</span>
         </div>
-        <div className="text-[9px] text-[color:var(--hud-dim)] mb-2">USAGE {((usedFrames / SIM_CONST.TOTAL_FRAMES) * 100).toFixed(1)}%</div>
+        <div className="text-[9px] text-[color:var(--hud-dim)] mb-2 flex justify-between">
+          <span>USAGE {((usedFrames / SIM_CONST.TOTAL_FRAMES) * 100).toFixed(1)}%</span>
+          <span>{usedFrames}/{SIM_CONST.TOTAL_FRAMES} frames</span>
+        </div>
         <div className="grid grid-cols-8 gap-[3px] flex-1">
           {frameOwner.map((pid, i) => (
             <div key={i} className="aspect-square border border-[color:var(--grid-line)] relative overflow-hidden">
@@ -65,11 +68,14 @@ export function MemoryPane() {
 
       {/* DISK */}
       <div className="panel relative p-3 flex-1 min-h-0 flex flex-col">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-1">
           <span className="hud-label">Secondary Memory · DISK</span>
-          <span className="hud-value" style={{ color: "var(--spark-magenta)" }}>{usedDisk}/{SIM_CONST.TOTAL_DISK_BLOCKS}</span>
+          <span className="hud-value" style={{ color: "var(--spark-magenta)" }}>{SIM_CONST.DISK_LABEL}</span>
         </div>
-        <div className="text-[9px] text-[color:var(--hud-dim)] mb-2">SECTORS — H/D PLATTER</div>
+        <div className="text-[9px] text-[color:var(--hud-dim)] mb-2 flex justify-between">
+          <span>SECTORS — H/D PLATTER</span>
+          <span>{usedDisk}/{SIM_CONST.TOTAL_DISK_BLOCKS} blocks</span>
+        </div>
         <div className="grid grid-cols-16 gap-[2px] flex-1" style={{ gridTemplateColumns: "repeat(16, minmax(0, 1fr))" }}>
           {diskOwner.map((pid, i) => (
             <div key={i} className="aspect-square border border-[color:var(--grid-line)] relative">
