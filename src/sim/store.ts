@@ -247,6 +247,29 @@ export const useSim = create<SimState>((set, get) => ({
   setClock: (v) => set({ clockMultiplier: v }),
   setDilation: (v) => set({ timeDilation: v }),
   setTarget: (v) => set({ targetProcesses: v }),
+  setExecutionSpeed: (v) => set({ executionSpeed: v }),
+  setDecayRate: (v) => set({ decayRate: v }),
+  simulateFault: (kind) => set((s) => {
+    const labels: Record<FaultKind, string> = {
+      page: "PAGE FAULT",
+      cache_miss: "CACHE MISS",
+      segfault: "SEGMENTATION FAULT",
+      stack_overflow: "STACK OVERFLOW",
+      div_by_zero: "DIV-BY-ZERO TRAP",
+      deadlock: "DEADLOCK DETECTED",
+    };
+    logPush(s as SimState, "err", `FAULT INJECTED · ${labels[kind]}`);
+    const patch: Partial<SimState> = {
+      faultsTotal: s.faultsTotal + 1,
+      cachePulse: 1,
+      registerFlash: { reg: Math.floor(Math.random() * 8), t: s.simTime },
+    };
+    if (kind === "cache_miss" || kind === "page") {
+      patch.cacheMiss = 1;
+      patch.ramToCpuPulse = 1;
+    }
+    return patch;
+  }),
   spawnProcess: () => set((s) => {
     const p = makeProcess(s as SimState);
     if (!p) return {};
