@@ -4,6 +4,15 @@ import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useSim } from "@/sim/store";
 
+const FAULT_LABELS: Record<string, string> = {
+  page: "PAGE FAULT",
+  cache_miss: "CACHE MISS",
+  segfault: "SEGMENTATION FAULT",
+  stack_overflow: "STACK OVERFLOW",
+  div_by_zero: "DIV-BY-ZERO TRAP",
+  deadlock: "DEADLOCK",
+};
+
 function GridFloor() {
   return <gridHelper args={[60, 60, "#141a26", "#0a0d14"]} position={[0, -7, 0]} />;
 }
@@ -108,7 +117,7 @@ function TrajNodes() {
               }}
             >
               {isFault
-                ? `⚠ ${n.faultKind?.toUpperCase()} · #${n.id}`
+                ? `⚠ ${FAULT_LABELS[n.faultKind!] ?? n.faultKind?.toUpperCase()} · #${n.id}`
                 : isPending
                   ? `⊙ QUEUED · #${n.id}`
                   : `ID: ${n.id}${n.visits > 1 ? ` ×${n.visits}` : ""}`}
