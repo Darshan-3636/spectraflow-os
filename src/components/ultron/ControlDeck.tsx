@@ -63,8 +63,8 @@ export function ControlDeck() {
           <span>I/O <span className="hud-value" style={{color:"var(--spark-blue)"}}>{io}</span></span>
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-4 flex-1">
-        <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-3 gap-4 flex-1 min-h-0">
+        <div className="flex flex-col gap-2 overflow-y-auto pr-2 min-h-0">
           <label className="hud-label">Clock Speed × {clock.toFixed(2)}</label>
           <input className="ult" type="range" min={0.25} max={4} step={0.05} value={clock} onChange={(e) => setClock(parseFloat(e.target.value))} />
           <label className="hud-label">Time Dilation × {dilation.toFixed(2)}</label>
