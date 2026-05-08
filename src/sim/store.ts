@@ -273,12 +273,12 @@ export const useSim = create<SimState>((set, get) => ({
     const nodes = [...s.trajNodes];
     if (nodes.length) {
       const last = nodes[nodes.length - 1];
-      nodes[nodes.length - 1] = { ...last, faultKind: kind, age: 0, life: Math.max(last.life, 2.2) };
+      nodes[nodes.length - 1] = { ...last, faultKind: kind, age: 0, life: 3, pendingVisit: false };
     } else {
       nodes.push({
         id: nextNodeId++,
         x: s.trajHead.x, y: s.trajHead.y, z: s.trajHead.z,
-        age: 0, life: 2.2, hue: 0, faultKind: kind, visits: 0,
+        age: 0, life: 3, hue: 0, faultKind: kind, visits: 0,
       });
     }
     const patch: Partial<SimState> = {
@@ -523,7 +523,10 @@ export const useSim = create<SimState>((set, get) => ({
       // Age & cull
       for (const n of s.trajNodes) n.age += dt;
       for (const seg of s.trajSegments) seg.age += dt;
-      s.trajNodes = s.trajNodes.filter((n) => n.pendingVisit || n.age < n.life);
+      s.trajNodes = s.trajNodes.filter((n) => {
+        if (n.faultKind) return n.age < 3;
+        return n.pendingVisit || n.age < n.life;
+      });
       s.trajSegments = s.trajSegments.filter((sg) => sg.age < sg.life);
     }
 
