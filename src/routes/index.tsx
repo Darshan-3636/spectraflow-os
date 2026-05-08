@@ -49,8 +49,9 @@ function Index() {
         <section className="relative panel min-h-0 overflow-hidden">
           <ExecutionManifold />
           <div className="absolute top-3 left-3 hud-label">3D Execution Space · Process Manifold</div>
-          <div className="absolute top-3 right-3 hud-label">PRIORITY ↑ · CPU SPARK</div>
-          <div className="absolute bottom-3 left-3 hud-label opacity-60">drift orbit · auto</div>
+          <div className="absolute top-3 right-3 hud-label">Y · PRIORITY  Z · CPU FOOTPRINT</div>
+          <div className="absolute bottom-3 left-3 hud-label opacity-70">← TIME FLOW (X axis)</div>
+          <div className="absolute bottom-3 right-3 hud-label opacity-70">DISK ◌  →  PAGE  →  RAM ▦</div>
         </section>
         <section className="flex flex-col gap-3 min-h-0">
           <CPUSchematic />
