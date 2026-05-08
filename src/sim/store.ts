@@ -514,6 +514,11 @@ export const useSim = create<SimState>((set, get) => ({
       ramToCpuPulse: s.ramToCpuPulse,
       pageMigrations: [...s.pageMigrations],
       pendingSwitch: s.pendingSwitch,
+      trajNodes: [...s.trajNodes],
+      trajSegments: [...s.trajSegments],
+      trajHead: { ...s.trajHead },
+      trajTarget: { ...s.trajTarget },
+      trajPrevTarget: { ...s.trajPrevTarget },
     });
   },
 }));
