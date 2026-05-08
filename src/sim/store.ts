@@ -111,6 +111,8 @@ export interface TrajNode {
   life: number;
   hue: number;
   faultKind?: FaultKind;
+  pendingVisit?: boolean;
+  visits: number;
 }
 export interface TrajSegment {
   ax: number; ay: number; az: number;
