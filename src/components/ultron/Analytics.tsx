@@ -37,16 +37,32 @@ export function PCAWaveform() {
     if (metrics.length < 2) return;
     const x = d3.scaleLinear().domain([metrics[0].t, metrics[metrics.length - 1].t]).range([4, w - 4]);
     const yCpu = d3.scaleLinear().domain([0, 1]).range([h - 4, 4]);
-    const maxF = d3.max(metrics, (m) => m.faults) || 1;
     const maxIo = d3.max(metrics, (m) => m.io) || 1;
-    const yF = d3.scaleLinear().domain([0, maxF]).range([h - 4, 4]);
     const yI = d3.scaleLinear().domain([0, maxIo]).range([h - 4, 4]);
     const lineCpu = d3.line<typeof metrics[number]>().x((d) => x(d.t)).y((d) => yCpu(d.cpu)).curve(d3.curveMonotoneX);
-    const lineF = d3.line<typeof metrics[number]>().x((d) => x(d.t)).y((d) => yF(d.faults));
     const lineI = d3.line<typeof metrics[number]>().x((d) => x(d.t)).y((d) => yI(d.io));
     svg.append("path").datum(metrics).attr("fill", "none").attr("stroke", "#ff5577").attr("stroke-width", 1).attr("d", lineCpu as never).attr("opacity", 0.9);
-    svg.append("path").datum(metrics).attr("fill", "none").attr("stroke", "#55ff99").attr("stroke-width", 1).attr("d", lineF as never).attr("opacity", 0.7);
     svg.append("path").datum(metrics).attr("fill", "none").attr("stroke", "#5599ff").attr("stroke-width", 1).attr("d", lineI as never).attr("opacity", 0.6);
+  }, [metrics]);
+  return <svg ref={ref} className="w-full h-full" />;
+}
+
+export function FaultsWaveform() {
+  const ref = useRef<SVGSVGElement>(null);
+  const metrics = useSim((s) => s.metrics);
+  useEffect(() => {
+    const svg = d3.select(ref.current);
+    const w = ref.current?.clientWidth || 240;
+    const h = ref.current?.clientHeight || 140;
+    svg.selectAll("*").remove();
+    if (metrics.length < 2) return;
+    const x = d3.scaleLinear().domain([metrics[0].t, metrics[metrics.length - 1].t]).range([4, w - 4]);
+    const maxF = d3.max(metrics, (m) => m.faults) || 1;
+    const yF = d3.scaleLinear().domain([0, maxF]).range([h - 4, 4]);
+    const lineF = d3.line<typeof metrics[number]>().x((d) => x(d.t)).y((d) => yF(d.faults)).curve(d3.curveStepAfter);
+    const area = d3.area<typeof metrics[number]>().x((d) => x(d.t)).y0(h - 4).y1((d) => yF(d.faults)).curve(d3.curveStepAfter);
+    svg.append("path").datum(metrics).attr("fill", "#55ff9933").attr("d", area as never);
+    svg.append("path").datum(metrics).attr("fill", "none").attr("stroke", "#55ff99").attr("stroke-width", 1.2).attr("d", lineF as never).attr("opacity", 0.95);
   }, [metrics]);
   return <svg ref={ref} className="w-full h-full" />;
 }

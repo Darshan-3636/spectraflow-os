@@ -31,11 +31,13 @@ export function ControlDeck() {
   const dilation = useSim((s) => s.timeDilation);
   const execSpeed = useSim((s) => s.executionSpeed);
   const decayRate = useSim((s) => s.decayRate);
+  const spawnRate = useSim((s) => s.nodeSpawnRate);
   const running = useSim((s) => s.running);
   const setClock = useSim((s) => s.setClock);
   const setDilation = useSim((s) => s.setDilation);
   const setExecSpeed = useSim((s) => s.setExecutionSpeed);
   const setDecayRate = useSim((s) => s.setDecayRate);
+  const setSpawnRate = useSim((s) => s.setNodeSpawnRate);
   const setRunning = useSim((s) => s.setRunning);
   const simulateFault = useSim((s) => s.simulateFault);
   const reset = useSim((s) => s.reset);
@@ -63,8 +65,32 @@ export function ControlDeck() {
           <span>I/O <span className="hud-value" style={{color:"var(--spark-blue)"}}>{io}</span></span>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 flex-1 min-h-0">
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1 content-start">
+      <div className="grid grid-cols-[auto_1fr] gap-4 flex-1 min-h-0">
+        <div className="flex flex-col gap-1.5 justify-center min-w-[160px]">
+          <button onClick={() => setRunning(!running)} className="text-[11px] tracking-[0.2em] uppercase border border-[color:var(--grid-line)] py-2 hover:bg-[color:oklch(1_0_0/0.04)]" style={{ color: running ? "var(--spark-cyan)" : "var(--spark-amber)" }}>
+            {running ? "■ pause" : "▶ resume"}
+          </button>
+          <select
+            value={fault}
+            onChange={(e) => setFault(e.target.value as FaultKind)}
+            className="bg-transparent text-[10px] tracking-[0.1em] uppercase border border-[color:var(--grid-line)] py-1.5 px-2 text-[color:var(--hud-text)] min-w-0"
+          >
+            {FAULTS.map((f) => (
+              <option key={f.v} value={f.v} style={{ background: "#0a0d14" }}>{f.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => simulateFault(fault)}
+            className="text-[10px] tracking-[0.15em] uppercase border border-[color:var(--grid-line)] py-1.5 px-2 hover:bg-[color:oklch(1_0_0/0.04)]"
+            style={{ color: "var(--spark-red)" }}
+          >
+            ⚠ inject fault
+          </button>
+          <button onClick={reset} className="text-[10px] tracking-[0.2em] uppercase border border-[color:var(--grid-line)] py-1.5 hover:bg-[color:oklch(1_0_0/0.04)]" style={{ color: "var(--spark-red)" }}>
+            ⟲ reset kernel
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2 content-center">
           <div className="flex flex-col">
             <label className="hud-label truncate">Clock × {clock.toFixed(2)}</label>
             <input className="ult" type="range" min={0.25} max={4} step={0.05} value={clock} onChange={(e) => setClock(parseFloat(e.target.value))} />
@@ -79,34 +105,12 @@ export function ControlDeck() {
           </div>
           <div className="flex flex-col">
             <label className="hud-label truncate">Decay · {decayRate.toFixed(2)}/s</label>
-            <input className="ult" type="range" min={0.1} max={3} step={0.05} value={decayRate} onChange={(e) => setDecayRate(parseFloat(e.target.value))} />
+            <input className="ult" type="range" min={0.02} max={6} step={0.02} value={decayRate} onChange={(e) => setDecayRate(parseFloat(e.target.value))} />
           </div>
-        </div>
-        <div className="flex flex-col gap-1.5 justify-center">
-          <button onClick={() => setRunning(!running)} className="text-[11px] tracking-[0.2em] uppercase border border-[color:var(--grid-line)] py-2 hover:bg-[color:oklch(1_0_0/0.04)]" style={{ color: running ? "var(--spark-cyan)" : "var(--spark-amber)" }}>
-            {running ? "■ pause" : "▶ resume"}
-          </button>
-          <div className="grid grid-cols-[1fr_auto] gap-1.5">
-            <select
-              value={fault}
-              onChange={(e) => setFault(e.target.value as FaultKind)}
-              className="bg-transparent text-[10px] tracking-[0.1em] uppercase border border-[color:var(--grid-line)] py-1.5 px-2 text-[color:var(--hud-text)] min-w-0"
-            >
-              {FAULTS.map((f) => (
-                <option key={f.v} value={f.v} style={{ background: "#0a0d14" }}>{f.label}</option>
-              ))}
-            </select>
-            <button
-              onClick={() => simulateFault(fault)}
-              className="text-[10px] tracking-[0.15em] uppercase border border-[color:var(--grid-line)] py-1.5 px-2 hover:bg-[color:oklch(1_0_0/0.04)]"
-              style={{ color: "var(--spark-red)" }}
-            >
-              ⚠ inject
-            </button>
+          <div className="flex flex-col col-span-2">
+            <label className="hud-label truncate">Spawn · {spawnRate.toFixed(2)} nodes/s</label>
+            <input className="ult" type="range" min={0.1} max={8} step={0.05} value={spawnRate} onChange={(e) => setSpawnRate(parseFloat(e.target.value))} />
           </div>
-          <button onClick={reset} className="text-[10px] tracking-[0.2em] uppercase border border-[color:var(--grid-line)] py-1.5 hover:bg-[color:oklch(1_0_0/0.04)]" style={{ color: "var(--spark-red)" }}>
-            ⟲ reset kernel
-          </button>
         </div>
       </div>
     </div>

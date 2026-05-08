@@ -80,6 +80,8 @@ interface SimState {
   targetNodeId: number | null;
   executionSpeed: number; // units/sec
   decayRate: number; // 1/sec — higher = faster fade
+  nodeSpawnRate: number; // nodes/sec — independent ready-queue spawn cadence
+  spawnAccum: number; // internal accumulator
   // actions
   setRunning: (v: boolean) => void;
   setClock: (v: number) => void;
@@ -87,6 +89,7 @@ interface SimState {
   setTarget: (v: number) => void;
   setExecutionSpeed: (v: number) => void;
   setDecayRate: (v: number) => void;
+  setNodeSpawnRate: (v: number) => void;
   simulateFault: (kind: FaultKind) => void;
   spawnProcess: () => void;
   killProcess: (pid: number) => void;
@@ -211,7 +214,7 @@ function randomTarget() {
 
 const initial = (): Omit<SimState,
   "setRunning" | "setClock" | "setDilation" | "setTarget" | "spawnProcess" | "killProcess" | "tick" | "reset"
-  | "setExecutionSpeed" | "setDecayRate" | "simulateFault"
+  | "setExecutionSpeed" | "setDecayRate" | "setNodeSpawnRate" | "simulateFault"
 > => ({
   running: true,
   simTime: 0,
@@ -243,6 +246,8 @@ const initial = (): Omit<SimState,
   targetNodeId: null,
   executionSpeed: 9,
   decayRate: 0.5,
+  nodeSpawnRate: 1.2,
+  spawnAccum: 0,
 });
 
 export const useSim = create<SimState>((set, get) => ({
@@ -253,6 +258,7 @@ export const useSim = create<SimState>((set, get) => ({
   setTarget: (v) => set({ targetProcesses: v }),
   setExecutionSpeed: (v) => set({ executionSpeed: v }),
   setDecayRate: (v) => set({ decayRate: v }),
+  setNodeSpawnRate: (v) => set({ nodeSpawnRate: v }),
   simulateFault: (kind) => set((s) => {
     const labels: Record<FaultKind, string> = {
       page: "PAGE FAULT",
@@ -447,28 +453,38 @@ export const useSim = create<SimState>((set, get) => ({
     s.ramToCpuPulse = Math.max(0, s.ramToCpuPulse - dt * 1.6);
 
     // === TRAJECTORY LOOP ===
-    // Pre-spawn target node, then move head toward it. Sometimes revisit existing nodes.
+    // Independent spawn cadence -> ready queue. CPU head pulls FIFO from queue.
     {
-      // Ensure we have a target node queued
+      // 1) Spawn pending nodes at nodeSpawnRate (capped queue)
+      s.spawnAccum += dt * s.nodeSpawnRate;
+      const pendingCount = s.trajNodes.filter((n) => n.pendingVisit).length;
+      const queueCap = 18;
+      while (s.spawnAccum >= 1) {
+        s.spawnAccum -= 1;
+        if (pendingCount + 1 > queueCap) break;
+        const t = randomTarget();
+        const baseLife = Math.max(0.3, 1 / Math.max(0.05, s.decayRate));
+        s.trajNodes.push({
+          id: nextNodeId++, x: t.x, y: t.y, z: t.z,
+          age: 0, life: baseLife + 14, hue: 170 + Math.random() * 90,
+          pendingVisit: true, visits: 0,
+        });
+      }
+      // 2) Pick next target (FIFO ready queue, occasionally revisit a completed node)
       if (s.targetNodeId == null || !s.trajNodes.find((n) => n.id === s.targetNodeId)) {
-        const candidates = s.trajNodes.filter((n) => !n.faultKind && !n.pendingVisit);
-        if (candidates.length > 2 && Math.random() < 0.45) {
-          // Revisit an existing node
-          const n = candidates[Math.floor(Math.random() * candidates.length)];
-          s.trajTarget = { x: n.x, y: n.y, z: n.z };
-          s.targetNodeId = n.id;
-        } else {
-          // Pre-spawn a brand-new node well before the head reaches it
-          const t = randomTarget();
-          const baseLife = Math.max(0.3, 1 / Math.max(0.05, s.decayRate));
-          const id = nextNodeId++;
-          s.trajNodes.push({
-            id, x: t.x, y: t.y, z: t.z,
-            age: 0, life: baseLife + 12, hue: 170 + Math.random() * 90,
-            pendingVisit: true, visits: 0,
-          });
-          s.trajTarget = t;
-          s.targetNodeId = id;
+        const pending = s.trajNodes.filter((n) => n.pendingVisit && !n.faultKind);
+        const completed = s.trajNodes.filter((n) => !n.pendingVisit && !n.faultKind);
+        let chosen: TrajNode | undefined;
+        if (completed.length > 2 && pending.length > 0 && Math.random() < 0.30) {
+          chosen = completed[Math.floor(Math.random() * completed.length)];
+        } else if (pending.length > 0) {
+          chosen = pending[0]; // oldest first — true ready queue
+        } else if (completed.length > 0) {
+          chosen = completed[Math.floor(Math.random() * completed.length)];
+        }
+        if (chosen) {
+          s.trajTarget = { x: chosen.x, y: chosen.y, z: chosen.z };
+          s.targetNodeId = chosen.id;
         }
       }
       const head = s.trajHead;
@@ -520,8 +536,12 @@ export const useSim = create<SimState>((set, get) => ({
     if (sp.trail.length > 60) sp.trail.shift();
 
     // metrics sample
-    const totalCpu = Object.values(s.processes).reduce((a, p) => a + p.cpuLoad, 0) / Math.max(1, s.targetProcesses);
-    s.cpuLoadEMA = s.cpuLoadEMA * 0.9 + totalCpu * 0.1;
+    const procLoad = Object.values(s.processes).reduce((a, p) => a + p.cpuLoad, 0) / Math.max(1, s.targetProcesses);
+    const queueLoad = Math.min(1, s.trajNodes.filter((n) => n.pendingVisit).length / 10);
+    const speedLoad = Math.min(1, s.executionSpeed / 30);
+    const trajLoad = Math.min(1, queueLoad * 0.55 + speedLoad * 0.55);
+    const totalCpu = Math.min(1, procLoad * 0.35 + trajLoad * 0.75);
+    s.cpuLoadEMA = s.cpuLoadEMA * 0.85 + totalCpu * 0.15;
     if (Math.random() < dt * 30) {
       // scatter sample using current proc's mapping
       let scatter;
