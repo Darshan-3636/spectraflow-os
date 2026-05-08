@@ -75,7 +75,13 @@ export function CPUSchematic() {
 
 export function GPUSchematic() {
   const procs = Object.values(useSim((s) => s.processes));
-  const gpu = Math.min(1, procs.reduce((a, p) => a + p.cpuLoad * 0.4, 0) / 6);
+  const execSpeed = useSim((s) => s.executionSpeed);
+  const trajPending = useSim((s) => s.trajNodes).filter((n) => n.pendingVisit).length;
+  const gpu = Math.min(1,
+    procs.reduce((a, p) => a + p.cpuLoad * 0.3, 0) / 6
+    + (execSpeed / 30) * 0.45
+    + Math.min(0.35, trajPending / 14)
+  );
   return (
     <div className="panel relative p-3">
       <div className="flex items-center justify-between mb-2">
