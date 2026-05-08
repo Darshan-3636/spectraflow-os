@@ -198,7 +198,18 @@ function logPush(state: SimState, kind: LogEntry["kind"], msg: string) {
   if (state.logs.length > 200) state.logs.splice(0, state.logs.length - 200);
 }
 
-const initial = (): Omit<SimState, "setRunning" | "setClock" | "setDilation" | "setTarget" | "spawnProcess" | "killProcess" | "tick" | "reset"> => ({
+function randomTarget() {
+  return {
+    x: (Math.random() - 0.5) * 18,
+    y: (Math.random() - 0.5) * 10,
+    z: (Math.random() - 0.5) * 14,
+  };
+}
+
+const initial = (): Omit<SimState,
+  "setRunning" | "setClock" | "setDilation" | "setTarget" | "spawnProcess" | "killProcess" | "tick" | "reset"
+  | "setExecutionSpeed" | "setDecayRate" | "simulateFault"
+> => ({
   running: true,
   simTime: 0,
   clockMultiplier: 1,
