@@ -41,7 +41,7 @@ export function CPUSchematic() {
 }
 
 export function GPUSchematic() {
-  const procs = useSim((s) => Object.values(s.processes));
+  const procs = Object.values(useSim((s) => s.processes));
   const gpu = Math.min(1, procs.reduce((a, p) => a + p.cpuLoad * 0.4, 0) / 6);
   return (
     <div className="panel relative p-3">

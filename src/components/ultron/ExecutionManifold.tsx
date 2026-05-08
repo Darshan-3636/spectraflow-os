@@ -115,7 +115,7 @@ function Spark() {
 
 function MigrationStreams() {
   // For each process whose pages are not yet fully in RAM, draw a faint stream from "disk" (-10, -6, 8) to its node.
-  const procs = useSim((s) => Object.values(s.processes));
+  const procs = Object.values(useSim((s) => s.processes));
   return (
     <>
       {procs.map((p) => {
@@ -151,7 +151,7 @@ function CameraOrbit() {
 }
 
 export function ExecutionManifold() {
-  const pids = useSim((s) => Object.keys(s.processes));
+  const pids = Object.keys(useSim((s) => s.processes));
   return (
     <div className="absolute inset-0">
       <Canvas camera={{ position: [12, 4, 12], fov: 55 }} gl={{ antialias: true, alpha: true }}>
