@@ -1,5 +1,5 @@
-import { useSim } from "@/sim/store";
-import { useEffect, useRef } from "react";
+import { useSim, type FaultKind } from "@/sim/store";
+import { useEffect, useRef, useState } from "react";
 
 export function Terminal() {
   const logs = useSim((s) => s.logs);
@@ -29,17 +29,29 @@ export function Terminal() {
 export function ControlDeck() {
   const clock = useSim((s) => s.clockMultiplier);
   const dilation = useSim((s) => s.timeDilation);
-  const target = useSim((s) => s.targetProcesses);
+  const execSpeed = useSim((s) => s.executionSpeed);
+  const decayRate = useSim((s) => s.decayRate);
   const running = useSim((s) => s.running);
   const setClock = useSim((s) => s.setClock);
   const setDilation = useSim((s) => s.setDilation);
-  const setTarget = useSim((s) => s.setTarget);
+  const setExecSpeed = useSim((s) => s.setExecutionSpeed);
+  const setDecayRate = useSim((s) => s.setDecayRate);
   const setRunning = useSim((s) => s.setRunning);
-  const spawn = useSim((s) => s.spawnProcess);
+  const simulateFault = useSim((s) => s.simulateFault);
   const reset = useSim((s) => s.reset);
   const simTime = useSim((s) => s.simTime);
   const faults = useSim((s) => s.faultsTotal);
   const io = useSim((s) => s.ioTotal);
+  const [fault, setFault] = useState<FaultKind>("page");
+
+  const FAULTS: { v: FaultKind; label: string }[] = [
+    { v: "page", label: "Page Fault" },
+    { v: "cache_miss", label: "Cache Miss" },
+    { v: "segfault", label: "Segmentation Fault" },
+    { v: "stack_overflow", label: "Stack Overflow" },
+    { v: "div_by_zero", label: "Div-by-Zero Trap" },
+    { v: "deadlock", label: "Deadlock" },
+  ];
 
   return (
     <div className="panel relative p-3 h-full flex flex-col gap-3">
@@ -57,25 +69,41 @@ export function ControlDeck() {
           <input className="ult" type="range" min={0.25} max={4} step={0.05} value={clock} onChange={(e) => setClock(parseFloat(e.target.value))} />
           <label className="hud-label">Time Dilation × {dilation.toFixed(2)}</label>
           <input className="ult" type="range" min={0.1} max={2} step={0.05} value={dilation} onChange={(e) => setDilation(parseFloat(e.target.value))} />
-          <label className="hud-label">Active Processes · {target}</label>
-          <input className="ult" type="range" min={2} max={24} step={1} value={target} onChange={(e) => setTarget(parseInt(e.target.value))} />
+          <label className="hud-label">Execution Speed · {execSpeed.toFixed(1)} u/s</label>
+          <input className="ult" type="range" min={1} max={30} step={0.5} value={execSpeed} onChange={(e) => setExecSpeed(parseFloat(e.target.value))} />
+          <label className="hud-label">Decay Rate · {decayRate.toFixed(2)} /s · life {(1/Math.max(0.05,decayRate)).toFixed(1)}s</label>
+          <input className="ult" type="range" min={0.1} max={3} step={0.05} value={decayRate} onChange={(e) => setDecayRate(parseFloat(e.target.value))} />
         </div>
         <div className="flex flex-col gap-2 justify-center">
           <button onClick={() => setRunning(!running)} className="text-[11px] tracking-[0.2em] uppercase border border-[color:var(--grid-line)] py-2 hover:bg-[color:oklch(1_0_0/0.04)]" style={{ color: running ? "var(--spark-cyan)" : "var(--spark-amber)" }}>
             {running ? "■ pause" : "▶ resume"}
           </button>
-          <button onClick={spawn} className="text-[11px] tracking-[0.2em] uppercase border border-[color:var(--grid-line)] py-2 hover:bg-[color:oklch(1_0_0/0.04)]" style={{ color: "var(--spark-magenta)" }}>
-            + spawn process
+          <label className="hud-label">Fault Type</label>
+          <select
+            value={fault}
+            onChange={(e) => setFault(e.target.value as FaultKind)}
+            className="bg-transparent text-[11px] tracking-[0.15em] uppercase border border-[color:var(--grid-line)] py-2 px-2 text-[color:var(--hud-text)]"
+          >
+            {FAULTS.map((f) => (
+              <option key={f.v} value={f.v} style={{ background: "#0a0d14" }}>{f.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => simulateFault(fault)}
+            className="text-[11px] tracking-[0.2em] uppercase border border-[color:var(--grid-line)] py-2 hover:bg-[color:oklch(1_0_0/0.04)]"
+            style={{ color: "var(--spark-red)" }}
+          >
+            ⚠ simulate fault
           </button>
           <button onClick={reset} className="text-[11px] tracking-[0.2em] uppercase border border-[color:var(--grid-line)] py-2 hover:bg-[color:oklch(1_0_0/0.04)]" style={{ color: "var(--spark-red)" }}>
             ⟲ reset kernel
           </button>
         </div>
         <div className="flex flex-col gap-1 text-[10px] text-[color:var(--hud-dim)] justify-center">
-          <div>FAULT TYPES TO SIMULATE</div>
-          <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full" style={{background:"var(--spark-red)"}}/> page fault · auto</div>
-          <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full" style={{background:"var(--spark-amber)"}}/> ctx switch · auto</div>
-          <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full" style={{background:"var(--spark-cyan)"}}/> disk migrate · auto</div>
+          <div>TRAJECTORY LOOP</div>
+          <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full" style={{background:"var(--spark-cyan)"}}/> execution line · spawns nodes on impact</div>
+          <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full" style={{background:"var(--spark-magenta)"}}/> nodes fade by decay rate</div>
+          <div className="flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full" style={{background:"var(--spark-amber)"}}/> cache pulses every spawn</div>
           <div className="mt-2 opacity-70">Scheduler: priority round-robin</div>
         </div>
       </div>

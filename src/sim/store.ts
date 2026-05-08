@@ -71,11 +71,22 @@ interface SimState {
   ramToCpuPulse: number; // 0..1 decays — visible as RAM->CPU latency
   pageMigrations: PageMigration[];
   pendingSwitch: { pid: number; at: number } | null; // ctx switch queued after cache pulse
+  // Trajectory loop
+  trajNodes: TrajNode[];
+  trajSegments: TrajSegment[];
+  trajHead: { x: number; y: number; z: number };
+  trajTarget: { x: number; y: number; z: number };
+  trajPrevTarget: { x: number; y: number; z: number };
+  executionSpeed: number; // units/sec
+  decayRate: number; // 1/sec — higher = faster fade
   // actions
   setRunning: (v: boolean) => void;
   setClock: (v: number) => void;
   setDilation: (v: number) => void;
   setTarget: (v: number) => void;
+  setExecutionSpeed: (v: number) => void;
+  setDecayRate: (v: number) => void;
+  simulateFault: (kind: FaultKind) => void;
   spawnProcess: () => void;
   killProcess: (pid: number) => void;
   tick: (dtRealSec: number) => void;
@@ -92,6 +103,24 @@ export interface PageMigration {
   duration: number; // sec
 }
 let nextMigId = 1;
+
+export interface TrajNode {
+  id: number;
+  x: number; y: number; z: number;
+  age: number;
+  life: number;
+  hue: number;
+  faultKind?: FaultKind;
+}
+export interface TrajSegment {
+  ax: number; ay: number; az: number;
+  bx: number; by: number; bz: number;
+  age: number;
+  life: number;
+  hue: number;
+}
+export type FaultKind = "page" | "cache_miss" | "segfault" | "stack_overflow" | "div_by_zero" | "deadlock";
+let nextNodeId = 100;
 
 let nextPid = 100;
 const PROC_NAMES = ["kernel_task", "vmlinuz", "scheduler", "systemd", "neuralcore", "iohelper", "renderd", "audio_dsp", "netmgr", "ult_daemon", "shaderc", "pagefault_h", "blockio", "tty", "fsync", "mmu_pump"];
@@ -169,7 +198,18 @@ function logPush(state: SimState, kind: LogEntry["kind"], msg: string) {
   if (state.logs.length > 200) state.logs.splice(0, state.logs.length - 200);
 }
 
-const initial = (): Omit<SimState, "setRunning" | "setClock" | "setDilation" | "setTarget" | "spawnProcess" | "killProcess" | "tick" | "reset"> => ({
+function randomTarget() {
+  return {
+    x: (Math.random() - 0.5) * 18,
+    y: (Math.random() - 0.5) * 10,
+    z: (Math.random() - 0.5) * 14,
+  };
+}
+
+const initial = (): Omit<SimState,
+  "setRunning" | "setClock" | "setDilation" | "setTarget" | "spawnProcess" | "killProcess" | "tick" | "reset"
+  | "setExecutionSpeed" | "setDecayRate" | "simulateFault"
+> => ({
   running: true,
   simTime: 0,
   clockMultiplier: 1,
@@ -192,6 +232,13 @@ const initial = (): Omit<SimState, "setRunning" | "setClock" | "setDilation" | "
   ramToCpuPulse: 0,
   pageMigrations: [],
   pendingSwitch: null,
+  trajNodes: [],
+  trajSegments: [],
+  trajHead: { x: 0, y: 0, z: 0 },
+  trajTarget: randomTarget(),
+  trajPrevTarget: { x: 0, y: 0, z: 0 },
+  executionSpeed: 9,
+  decayRate: 0.5,
 });
 
 export const useSim = create<SimState>((set, get) => ({
@@ -200,6 +247,29 @@ export const useSim = create<SimState>((set, get) => ({
   setClock: (v) => set({ clockMultiplier: v }),
   setDilation: (v) => set({ timeDilation: v }),
   setTarget: (v) => set({ targetProcesses: v }),
+  setExecutionSpeed: (v) => set({ executionSpeed: v }),
+  setDecayRate: (v) => set({ decayRate: v }),
+  simulateFault: (kind) => set((s) => {
+    const labels: Record<FaultKind, string> = {
+      page: "PAGE FAULT",
+      cache_miss: "CACHE MISS",
+      segfault: "SEGMENTATION FAULT",
+      stack_overflow: "STACK OVERFLOW",
+      div_by_zero: "DIV-BY-ZERO TRAP",
+      deadlock: "DEADLOCK DETECTED",
+    };
+    logPush(s as SimState, "err", `FAULT INJECTED · ${labels[kind]}`);
+    const patch: Partial<SimState> = {
+      faultsTotal: s.faultsTotal + 1,
+      cachePulse: 1,
+      registerFlash: { reg: Math.floor(Math.random() * 8), t: s.simTime },
+    };
+    if (kind === "cache_miss" || kind === "page") {
+      patch.cacheMiss = 1;
+      patch.ramToCpuPulse = 1;
+    }
+    return patch;
+  }),
   spawnProcess: () => set((s) => {
     const p = makeProcess(s as SimState);
     if (!p) return {};
@@ -359,6 +429,46 @@ export const useSim = create<SimState>((set, get) => ({
     s.cacheMiss = Math.max(0, s.cacheMiss - dt * 1.2);
     s.ramToCpuPulse = Math.max(0, s.ramToCpuPulse - dt * 1.6);
 
+    // === TRAJECTORY LOOP ===
+    // Move execution head toward current target at executionSpeed.
+    {
+      const head = s.trajHead;
+      const tgt = s.trajTarget;
+      const dx = tgt.x - head.x, dy = tgt.y - head.y, dz = tgt.z - head.z;
+      const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+      const step = s.executionSpeed * dt;
+      if (dist <= step + 0.01) {
+        // arrived — spawn node + segment, pick next target
+        head.x = tgt.x; head.y = tgt.y; head.z = tgt.z;
+        const life = Math.max(0.3, 1 / Math.max(0.05, s.decayRate));
+        const hue = 170 + Math.random() * 90;
+        s.trajNodes.push({
+          id: nextNodeId++, x: tgt.x, y: tgt.y, z: tgt.z,
+          age: 0, life, hue,
+        });
+        s.trajSegments.push({
+          ax: s.trajPrevTarget.x, ay: s.trajPrevTarget.y, az: s.trajPrevTarget.z,
+          bx: tgt.x, by: tgt.y, bz: tgt.z,
+          age: 0, life, hue,
+        });
+        s.trajPrevTarget = { x: tgt.x, y: tgt.y, z: tgt.z };
+        s.trajTarget = randomTarget();
+        // pulse cache + register on every spawn
+        s.cachePulse = 1;
+        s.registerFlash = { reg: Math.floor(Math.random() * 8), t: s.simTime };
+        if (Math.random() < 0.18) { s.cacheMiss = 1; s.ramToCpuPulse = 1; }
+      } else {
+        head.x += (dx / dist) * step;
+        head.y += (dy / dist) * step;
+        head.z += (dz / dist) * step;
+      }
+      // Age & cull
+      for (const n of s.trajNodes) n.age += dt;
+      for (const seg of s.trajSegments) seg.age += dt;
+      s.trajNodes = s.trajNodes.filter((n) => n.age < n.life);
+      s.trajSegments = s.trajSegments.filter((sg) => sg.age < sg.life);
+    }
+
     // spark animation toward target
     const sp = s.spark;
     sp.x += (sp.tx - sp.x) * Math.min(1, dt * 12);
@@ -404,6 +514,11 @@ export const useSim = create<SimState>((set, get) => ({
       ramToCpuPulse: s.ramToCpuPulse,
       pageMigrations: [...s.pageMigrations],
       pendingSwitch: s.pendingSwitch,
+      trajNodes: [...s.trajNodes],
+      trajSegments: [...s.trajSegments],
+      trajHead: { ...s.trajHead },
+      trajTarget: { ...s.trajTarget },
+      trajPrevTarget: { ...s.trajPrevTarget },
     });
   },
 }));
